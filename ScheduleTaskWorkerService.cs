@@ -62,10 +62,9 @@ public class ScheduleTaskWorkerService<T> : BackgroundService where T : ISchedul
 
         await using var connection = _connectionFactory.Create();
         await connection.OpenAsync();
-        await using var tx = await connection.BeginTransactionAsync();
 
         var ydbCommand = connection.CreateCommand();
-        ydbCommand.Transaction = tx;
+        ydbCommand.Transaction = await connection.BeginTransactionAsync();
         ydbCommand.CommandText = $"""
                                   INSERT INTO ScheduleTask
                                   ({nameof(_entityRecord.Id)}, {nameof(_entityRecord.Type)}, {nameof(_entityRecord.Error)})
@@ -75,7 +74,7 @@ public class ScheduleTaskWorkerService<T> : BackgroundService where T : ISchedul
         ydbCommand.Parameters.Add(new YdbParameter("@Id", _entityRecord.Id.ToString("D")));
         ydbCommand.Parameters.Add(new YdbParameter("@Type", _entityRecord.Type));
         await ydbCommand.ExecuteNonQueryAsync();
-        await tx.CommitAsync();
+        await ydbCommand.Transaction.CommitAsync();
 
         _logger.LogInformation("Inserted '{taskName}' task with Id '{id}'", _entityRecord.Type, _entityRecord.Id);
     }
@@ -86,10 +85,9 @@ public class ScheduleTaskWorkerService<T> : BackgroundService where T : ISchedul
 
         await using var connection = _connectionFactory.Create();
         await connection.OpenAsync();
-        await using var tx = await connection.BeginTransactionAsync();
 
         var ydbCommand = connection.CreateCommand();
-        ydbCommand.Transaction = tx;
+        ydbCommand.Transaction = await connection.BeginTransactionAsync();
         ydbCommand.CommandText = $"""
                                   UPDATE ScheduleTask
                                   SET
@@ -107,13 +105,13 @@ public class ScheduleTaskWorkerService<T> : BackgroundService where T : ISchedul
         try
         {
             await ydbCommand.ExecuteNonQueryAsync();
-            await tx.CommitAsync();
+            await ydbCommand.Transaction.CommitAsync();
             _logger.LogInformation("Updated '{taskName}' task execution result", _entityRecord.Type);
         }
         catch (YdbException e)
         {
             _logger.LogError(e, "Failed to update '{taskName}' task execution result", _entityRecord.Type);
-            await tx.RollbackAsync();
+            await ydbCommand.Transaction.RollbackAsync();
         }
     }
 
@@ -123,10 +121,9 @@ public class ScheduleTaskWorkerService<T> : BackgroundService where T : ISchedul
 
         await using var connection = _connectionFactory.Create();
         await connection.OpenAsync();
-        await using var tx = await connection.BeginTransactionAsync();
 
         var ydbCommand = connection.CreateCommand();
-        ydbCommand.Transaction = tx;
+        ydbCommand.Transaction = await connection.BeginTransactionAsync();
         ydbCommand.CommandText = $"""
                                   UPDATE ScheduleTask
                                   SET
@@ -142,13 +139,13 @@ public class ScheduleTaskWorkerService<T> : BackgroundService where T : ISchedul
         try
         {
             await ydbCommand.ExecuteNonQueryAsync();
-            await tx.CommitAsync();
+            await ydbCommand.Transaction.CommitAsync();
             _logger.LogInformation("Updated '{taskName}' task start time", _entityRecord.Type);
         }
         catch (YdbException e)
         {
             _logger.LogError(e, "Failed to update '{taskName}' task start time", _entityRecord.Type);
-            await tx.RollbackAsync();
+            await ydbCommand.Transaction.RollbackAsync();
         }
     }
 
